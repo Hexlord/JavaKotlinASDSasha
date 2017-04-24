@@ -5,6 +5,7 @@ import org.omg.CORBA.IntHolder;
 
 import java.util.AbstractSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 // Attention: comparable supported but comparator is not
@@ -59,30 +60,108 @@ public class BinaryTree<T extends Comparable<T>> extends AbstractSet<T> {
         return right == null || right.value.compareTo(node.value) > 0 && checkInvariant(right);
     }
     
+    @SuppressWarnings("unchecked")
     @Override
     public boolean remove(Object o) {
         
-        @SuppressWarnings("unchecked")
-        T t = (T) o;
         
-        if (root != null) {
-            if (root.value.compareTo(t) == 0) {
-                size = 0;
-                root = null;
-                return true;
-            } else {
-                int comparisonRoot = t.compareTo(root.value);
-                if (removeIterate(root, t, comparisonRoot)) {
-                    return true;
+        if (o instanceof List<?>) {
+            boolean isRemoved = false;
+            
+            for (Object i : ((List<?>) o)) {
+                if (remove(i)) {
+                    isRemoved = true;
                 }
             }
+            
+            return isRemoved;
+        } else if (o instanceof Comparable) {
+            
+            return remove((T) o);
+            
         }
         
         return false;
-        
     }
     
-    private boolean removeIterate(Node<T> start, T value, int comparison) {
+    private boolean remove(T t) {
+        if (root != null && t != null) {
+            
+            int comparison = t.compareTo(root.value);
+            
+            if (comparison == 0) { // removing root
+                
+                // special case of removing root itself involves direct root pointer issue ( can not
+                // use removeChildNode method due to lack of root's parent )
+                if (root.left == null) { // no root.left, then just place root.right instead of root
+                    root = root.right;
+                } else {
+                    Node<T> right = root.right; // can be null, lower than any node in left branch
+                    root = root.left; // not null
+                    Node<T> lowest = findLowestInBranch(root); // lowest node in root.left
+                    lowest.right = right; // connect to lowest node of bigger than base root branch
+                    
+                }
+                size--; // always success
+                return true;
+            } else { // search for node parent and perform removeChildNode
+                if (removeNodeSearch(root, t, comparison)) {
+                    return true;
+                }
+            }
+            
+            
+        }
+        
+        return false;
+    }
+    
+    // always move to Node.right to get the lowest one
+    private Node<T> findLowestInBranch(Node<T> start) {
+        Node<T> r = start;
+        while (r.right != null) {
+            r = r.right;
+        }
+        return r;
+    }
+    
+    // way = 1 => remove right
+    // way = -1 => remove left
+    private boolean removeChildNode(Node<T> parent, int way) {
+        
+        // look for comments inside remove(..) method
+        if (way == 1) {
+            if (parent.right.left == null) {
+                parent.right = parent.right.right;
+            } else {
+                Node<T> right = parent.right.right;
+                parent.right = parent.right.left;
+                Node<T> lowest = findLowestInBranch(parent.right);
+                lowest.right = right;
+                
+            }
+            
+            size--;
+            return true;
+        } else if (way == -1) {
+            if (parent.left.left == null) {
+                parent.left = parent.left.right;
+            } else {
+                Node<T> right = parent.left.right;
+                parent.left = parent.left.left;
+                Node<T> lowest = findLowestInBranch(parent.left);
+                lowest.right = right;
+                
+            }
+            
+            size--;
+            return true;
+        }
+        
+        return false;
+    }
+    
+    private boolean removeNodeSearch(Node<T> start, T value, int comparison) {
         
         if (comparison < 0) {
             
@@ -90,11 +169,8 @@ public class BinaryTree<T extends Comparable<T>> extends AbstractSet<T> {
                 
                 int comparisonLeft = value.compareTo(start.left.value);
                 if (comparisonLeft == 0) {
-                    size -= 1 + countChild(start.left);
-                    start.left = null;
-                    return true;
-                }
-                if (removeIterate(start.left, value, comparisonLeft)) {
+                    return removeChildNode(start, -1);
+                } else if (removeNodeSearch(start.left, value, comparisonLeft)) { // keep searching
                     return true;
                 }
                 
@@ -105,11 +181,8 @@ public class BinaryTree<T extends Comparable<T>> extends AbstractSet<T> {
                 
                 int comparisonRight = value.compareTo(start.right.value);
                 if (comparisonRight == 0) {
-                    size -= 1 + countChild(start.right);
-                    start.right = null;
-                    return true;
-                }
-                if (removeIterate(start.right, value, comparisonRight)) {
+                    return removeChildNode(start, 1);
+                } else if (removeNodeSearch(start.right, value, comparisonRight)) { // keep searching
                     return true;
                 }
                 
@@ -119,6 +192,7 @@ public class BinaryTree<T extends Comparable<T>> extends AbstractSet<T> {
         return false;
     }
     
+    // unused
     private int countChild(Node<T> start) {
         IntHolder counter = new IntHolder(0);
         
@@ -131,6 +205,7 @@ public class BinaryTree<T extends Comparable<T>> extends AbstractSet<T> {
         return counter.value;
     }
     
+    // unused
     private void countChildIterate(Node<T> start, IntHolder counter) {
         
         if (start.left != null) {
